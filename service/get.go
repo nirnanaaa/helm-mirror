@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/url"
 	"os"
 	"path"
+	"strings"
 
 	"k8s.io/helm/cmd/helm/search"
 	"k8s.io/helm/pkg/getter"
@@ -75,7 +77,10 @@ func (g *GetService) Get() error {
 	if err != nil {
 		return err
 	}
-
+	chartIndexURL, err := url.Parse(chartRepo.Config.URL)
+	if err != nil {
+		return err
+	}
 	for _, r := range res {
 		if g.chartName != "" && r.Chart.Name != g.chartName {
 			continue
@@ -84,6 +89,11 @@ func (g *GetService) Get() error {
 			continue
 		}
 		for _, u := range r.Chart.URLs {
+			if !strings.HasPrefix(u, "http") {
+				chartURL := chartIndexURL
+				chartURL.Path = u
+				u = chartURL.String()
+			}
 			b, err := chartRepo.Client.Get(u)
 			if err != nil {
 				if g.ignoreErrors {
@@ -111,7 +121,7 @@ func (g *GetService) Get() error {
 
 func writeFile(name string, content []byte, log *log.Logger, ignoreErrors bool) error {
 	err := ioutil.WriteFile(name, content, 0666)
-	if ignoreErrors {
+	if ignoreErrors && err != nil {
 		log.Printf("cannot write files %s: %s", name, err)
 	} else {
 		return err
